@@ -1,0 +1,76 @@
+"use client";
+
+import type { ClientGameState } from "@/lib/types";
+import { Card } from "@/components/Card";
+import { ALL_CARDS } from "@/lib/cards";
+import { Modal } from "@/components/Modal";
+import { useState } from "react";
+
+export function RevealPrompt({
+  state,
+  onReveal,
+}: {
+  state: ClientGameState;
+  onReveal: (cardId: string | null) => void;
+}) {
+  const active = state.activeSuggestion;
+  const [open, setOpen] = useState(true);
+  if (!active) return null;
+
+  const me = state.players.find((p) => p.isMe);
+  if (!me) return null;
+
+  const matches = state.myHand.filter((c) => active.suggestion[c.type] === c.id);
+
+  return (
+    <Modal
+      open={open}
+      title="Show a card?"
+      onClose={() => setOpen(false)}
+      footer={
+        <>
+          <button
+            className="btn btn-secondary"
+            disabled={matches.length > 0}
+            onClick={() => {
+              onReveal(null);
+              setOpen(false);
+            }}
+          >
+            Pass (no matches)
+          </button>
+          {matches.length === 0 && (
+            <span className="muted small">You have no matching card.</span>
+          )}
+        </>
+      }
+    >
+      <p className="muted">
+        {state.players.find((p) => p.id === active.suggesterId)?.name} suggested:
+      </p>
+      <div className="reveal-suggestion">
+        {Object.entries(active.suggestion).map(([type, id]) => {
+          const card = ALL_CARDS.find((c) => c.id === id);
+          if (!card) return null;
+          return <Card key={id} card={card} size="sm" />;
+        })}
+      </div>
+      <p className="muted">
+        You hold {matches.length} matching card{matches.length === 1 ? "" : "s"}. Pick one to secretly reveal:
+      </p>
+      <div className="reveal-options">
+        {matches.map((c) => (
+          <Card
+            key={c.id}
+            card={c}
+            size="sm"
+            onClick={() => {
+              onReveal(c.id);
+              setOpen(false);
+            }}
+          />
+        ))}
+      </div>
+    </Modal>
+  );
+}
