@@ -22,6 +22,7 @@ import {
   revealCard,
   startGame,
   suggest,
+  surrender,
   validateConfig,
   MAX_PLAYERS,
 } from "./engine";
@@ -40,6 +41,7 @@ export const SOCK_EVENTS = {
   ACCUSE: "game:accusation",
   ADD_BOT: "host:add-bot",
   REMOVE_BOT: "host:remove-bot",
+  SURRENDER: "player:surrender",
   LOG: "game:log",
   ERROR: "room:error",
   LEFT: "room:left",
@@ -241,10 +243,44 @@ function processBotActions(room: GameState): void {
   }
 }
 
-/** Broadcast + schedule bot actions in one call. */
+/** Broadcast + schedule bot actions + reset inactivity timer. */
 function broadcastAndBot(room: GameState): void {
   broadcastState(room);
   scheduleBotActions(room);
+  scheduleInactivityTimer(room);
+}
+
+// ---------- Inactivity auto-surrender (4 minutes) ----------
+
+const INACTIVITY_MS = 4 * 60 * 1000; // 4 minutes
+const inactivityTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function scheduleInactivityTimer(room: GameState): void {
+  // Clear any existing timer for this room
+  const existing = inactivityTimers.get(room.id);
+  if (existing) clearTimeout(existing);
+  inactivityTimers.delete(room.id);
+
+  if (room.phase !== "playing") return;
+
+  const currentPlayer = room.players[room.currentTurnIdx];
+  // Only set timer for human players
+  if (!currentPlayer || currentPlayer.isBot || currentPlayer.eliminated) return;
+
+  const timer = setTimeout(() => {
+    inactivityTimers.delete(room.id);
+    const current = store.room(room.id);
+    if (!current || current.phase !== "playing") return;
+    const player = current.players[current.currentTurnIdx];
+    if (!player || player.isBot || player.eliminated) return;
+    // Auto-surrender
+    const err = surrender(current, player.id);
+    if (!err) {
+      current.log.unshift(makeLog("system", `⏰ ${player.name} was auto-surrendered due to inactivity.`));
+      broadcastAndBot(current);
+    }
+  }, INACTIVITY_MS);
+  inactivityTimers.set(room.id, timer);
 }
 
 function createRoom(hostName: string, hostSocketId: string): GameState {
@@ -553,6 +589,18 @@ function attachHandlers(io: IOServer): void {
       if (err) { ack?.({ ok: false, error: err }); return; }
       ack?.({ ok: true });
       broadcastState(room);
+    });
+
+    // ---------- Surrender ----------
+
+    socket.on(SOCK_EVENTS.SURRENDER, () => {
+      const lookup = store.lookupSocket(socket.id);
+      if (!lookup) return;
+      const room = store.room(lookup.roomId);
+      if (!room) return;
+      const err = surrender(room, lookup.playerId);
+      if (err) socket.emit(SOCK_EVENTS.ERROR, err);
+      else broadcastAndBot(room);
     });
 
     socket.on("disconnect", () => {

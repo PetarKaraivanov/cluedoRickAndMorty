@@ -355,7 +355,9 @@ export function accuse(
     room.log.unshift(
       makeLog("accusation", `${playerName(room, playerId)} accused ${labels} — WRONG. They are out.`),
     );
-    if (activePlayers(room).length < 2) {
+    if (checkOnlyBotsLeft(room)) {
+      // Game ended — only bots remain
+    } else if (activePlayers(room).length < 2) {
       room.phase = "finished";
       room.winner = null;
       room.finishedAt = Date.now();
@@ -394,6 +396,60 @@ export function advanceTurn(room: GameState): void {
 
 export function activePlayers(room: GameState): Player[] {
   return room.players.filter((p) => !p.eliminated);
+}
+
+/** Returns true if the game should end because only bots are left. */
+export function checkOnlyBotsLeft(room: GameState): boolean {
+  if (room.phase !== "playing") return false;
+  const active = activePlayers(room);
+  const humanActive = active.filter((p) => !p.isBot);
+  if (humanActive.length === 0 && active.length > 0) {
+    room.phase = "finished";
+    room.winner = null;
+    room.finishedAt = Date.now();
+    room.log.unshift(makeLog("system", "All human players are out. The killer escapes! 💀"));
+    return true;
+  }
+  return false;
+}
+
+export function surrender(room: GameState, playerId: string): string | null {
+  if (room.phase !== "playing") return "Game not in progress.";
+  const player = room.players.find((p) => p.id === playerId);
+  if (!player) return "Player not found.";
+  if (player.eliminated) return "Already eliminated.";
+  if (player.isBot) return "Bots cannot surrender.";
+
+  player.eliminated = true;
+  room.log.unshift(makeLog("system", `🏳️ ${player.name} surrendered.`));
+
+  // If this player was mid-suggestion as opponent, auto-pass
+  if (room.activeSuggestion && !room.activeSuggestion.resolved) {
+    const active = room.activeSuggestion;
+    if (active.revealQueue.includes(playerId) && active.opponentResponses[playerId] === undefined) {
+      active.opponentResponses[playerId] = null;
+    }
+  }
+
+  // Check if only bots remain
+  if (checkOnlyBotsLeft(room)) return null;
+
+  // If fewer than 2 active players total, game over
+  if (activePlayers(room).length < 2) {
+    room.phase = "finished";
+    room.winner = null;
+    room.finishedAt = Date.now();
+    room.log.unshift(makeLog("system", "No players left who can win. The killer escapes."));
+    return null;
+  }
+
+  // If it was this player's turn, advance
+  if (room.players[room.currentTurnIdx]?.id === playerId) {
+    room.activeSuggestion = null;
+    advanceTurn(room);
+  }
+
+  return null;
 }
 
 export function playerName(room: GameState, id: string): string {

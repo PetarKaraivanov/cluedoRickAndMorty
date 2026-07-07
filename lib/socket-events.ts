@@ -14,6 +14,7 @@ export const SOCK_EVENTS = {
   ACCUSE: "game:accusation",
   ADD_BOT: "host:add-bot",
   REMOVE_BOT: "host:remove-bot",
+  SURRENDER: "player:surrender",
   LOG: "game:log",
   ERROR: "room:error",
   LEFT: "room:left",

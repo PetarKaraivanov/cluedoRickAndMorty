@@ -1218,6 +1218,28 @@ a {
   50% { opacity: 0.5; }
 }
 
+/* ---------- Surrender ---------- */
+
+.btn-surrender {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(255, 77, 109, 0.08);
+  border: 1px solid rgba(255, 77, 109, 0.2);
+  color: var(--text-muted);
+  font-size: 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.btn-surrender:hover {
+  background: rgba(255, 77, 109, 0.15);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
 /* ---------- Modal ---------- */
 
 .modal-overlay {
