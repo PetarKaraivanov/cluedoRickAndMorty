@@ -8,9 +8,10 @@ import type {
   Player,
   RoomConfig,
   Suggestion,
+  SuggestionHistoryEntry,
 } from "./types";
 
-export const MIN_PLAYERS = 3;
+export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;
 export const MIN_CARD_TYPES = 3;
 export const ROOM_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -110,6 +111,7 @@ export function startGame(room: GameState): string | null {
   room.hasSuggested = false;
   room.currentTurnIdx = 0;
   room.startedAt = Date.now();
+  room.suggestionHistory = [];
   room.log.unshift(makeLog("system", "Game started. The killer's identity is sealed in the envelope."));
   return null;
 }
@@ -150,23 +152,32 @@ export function suggest(
   if (!isSuggestionComplete(suggestion, room.config.cardTypes)) return "Suggestion is incomplete.";
   room.hasSuggested = true;
   room.turnStage = "revealing";
+
+  // All non-eliminated opponents must respond
   const queue = room.players
     .filter((p) => p.id !== playerId && !p.eliminated)
     .map((p) => p.id);
+
   room.activeSuggestion = {
     suggesterId: playerId,
     suggestion,
     revealQueue: queue,
-    revealingPlayerId: queue[0] ?? null,
+    opponentResponses: {},
+    opposingPlayerIds: [],
+    allResponded: false,
+    chosenOpponentId: null,
     revealedCardId: null,
+    revealingPlayerId: null,
   };
+
   const labels = describeSuggestion(suggestion, room.deck);
   room.log.unshift(
     makeLog("suggestion", `${playerName(room, playerId)} suspects: ${labels}.`),
   );
+
   // If no one to reveal (all eliminated except suggester), finish immediately
   if (queue.length === 0) {
-    finishSuggestion(room, null);
+    finishSuggestion(room, null, null);
   }
   return null;
 }
@@ -175,6 +186,11 @@ export function cardsMatchingSuggestion(player: Player, suggestion: Suggestion):
   return player.hand.filter((c) => suggestion[c.type] === c.id);
 }
 
+/**
+ * An opponent responds to the suggestion by picking a card or passing.
+ * All opponents respond simultaneously. Once all have responded, we transition
+ * to "picking-opponent" (if anyone opposed) or finish (if no one opposed).
+ */
 export function revealCard(
   room: GameState,
   revealerId: string,
@@ -182,50 +198,129 @@ export function revealCard(
 ): string | null {
   const active = room.activeSuggestion;
   if (!active) return "No active suggestion.";
-  if (active.revealingPlayerId !== revealerId) return "Not your turn to reveal.";
+  if (!active.revealQueue.includes(revealerId)) return "You are not in the reveal queue.";
+  if (active.opponentResponses[revealerId] !== undefined) return "You already responded.";
+
   const revealer = room.players.find((p) => p.id === revealerId);
   if (!revealer) return "Unknown player.";
+
+  const matches = cardsMatchingSuggestion(revealer, active.suggestion);
+
   if (cardId !== null) {
-    const match = cardsMatchingSuggestion(revealer, active.suggestion).find((c) => c.id === cardId);
+    // Player is showing a card — validate it matches
+    const match = matches.find((c) => c.id === cardId);
     if (!match) return "You must reveal a card that matches the suggestion, or pass.";
-    active.revealedCardId = cardId;
-    room.log.unshift(
-      makeLog("reveal", `${revealer.name} secretly showed a card to ${playerName(room, active.suggesterId)}.`),
-    );
+    active.opponentResponses[revealerId] = cardId;
   } else {
-    if (cardsMatchingSuggestion(revealer, active.suggestion).length > 0) {
+    // Player is passing — only allowed if they have no matching cards
+    if (matches.length > 0) {
       return "You have a matching card; you must reveal one.";
     }
-    room.log.unshift(makeLog("reveal", `${revealer.name} had no matching card.`));
+    active.opponentResponses[revealerId] = null;
   }
-  advanceRevealQueue(room, cardId);
+
+  // Check if all opponents have responded
+  const allResponded = active.revealQueue.every(
+    (id) => active.opponentResponses[id] !== undefined,
+  );
+
+  if (allResponded) {
+    active.allResponded = true;
+    // Determine who opposed (had matching cards = chose a non-null card)
+    active.opposingPlayerIds = active.revealQueue.filter(
+      (id) => active.opponentResponses[id] !== null,
+    );
+
+    if (active.opposingPlayerIds.length === 0) {
+      // No one had matching cards
+      room.log.unshift(makeLog("reveal", "No one had a matching card."));
+      finishSuggestion(room, null, null);
+    } else if (active.opposingPlayerIds.length === 1) {
+      // Only one opponent — auto-pick them
+      const opponentId = active.opposingPlayerIds[0];
+      const opponentCardId = active.opponentResponses[opponentId]!;
+      const opponent = room.players.find((p) => p.id === opponentId);
+      active.chosenOpponentId = opponentId;
+      active.revealedCardId = opponentCardId;
+      room.log.unshift(
+        makeLog("reveal", `${opponent?.name ?? "?"} secretly showed a card to ${playerName(room, active.suggesterId)}.`),
+      );
+      finishSuggestion(room, opponentId, opponentCardId);
+    } else {
+      // Multiple opponents — the suggester must pick one
+      room.turnStage = "picking-opponent";
+      const names = active.opposingPlayerIds
+        .map((id) => playerName(room, id))
+        .join(", ");
+      room.log.unshift(
+        makeLog("reveal", `${names} can show a card. ${playerName(room, active.suggesterId)} must pick one.`),
+      );
+    }
+  }
+
   return null;
 }
 
-function advanceRevealQueue(room: GameState, revealedCardId: string | null): void {
-  const active = room.activeSuggestion!;
-  const nextQueue = active.revealQueue.slice(1);
-  active.revealQueue = nextQueue;
-  if (revealedCardId) {
-    finishSuggestion(room, revealedCardId);
-    return;
-  }
-  if (nextQueue.length === 0) {
-    finishSuggestion(room, null);
-  } else {
-    active.revealingPlayerId = nextQueue[0];
-    active.revealedCardId = null;
-  }
+/**
+ * The suggester picks which opponent to see the card from.
+ */
+export function pickOpponent(
+  room: GameState,
+  suggesterId: string,
+  chosenOpponentId: string,
+): string | null {
+  const active = room.activeSuggestion;
+  if (!active) return "No active suggestion.";
+  if (active.suggesterId !== suggesterId) return "Only the suggester can pick an opponent.";
+  if (room.turnStage !== "picking-opponent") return "Not in the picking phase.";
+  if (!active.opposingPlayerIds.includes(chosenOpponentId)) return "Invalid opponent.";
+
+  const opponentCardId = active.opponentResponses[chosenOpponentId]!;
+  active.chosenOpponentId = chosenOpponentId;
+  active.revealedCardId = opponentCardId;
+
+  const opponent = room.players.find((p) => p.id === chosenOpponentId);
+  room.log.unshift(
+    makeLog("reveal", `${opponent?.name ?? "?"} secretly showed a card to ${playerName(room, suggesterId)}.`),
+  );
+
+  finishSuggestion(room, chosenOpponentId, opponentCardId);
+  return null;
 }
 
-function finishSuggestion(room: GameState, revealedCardId: string | null): void {
+function finishSuggestion(room: GameState, chosenOpponentId: string | null, revealedCardId: string | null): void {
   const active = room.activeSuggestion!;
+
+  // Track the card the suggester saw
   if (revealedCardId) {
     const suggester = room.players.find((p) => p.id === active.suggesterId);
     if (suggester && !suggester.seenCards.includes(revealedCardId)) {
       suggester.seenCards.push(revealedCardId);
     }
   }
+
+  // Build history entry
+  const opposingPlayers = (active.opposingPlayerIds ?? []).map((id) => ({
+    id,
+    name: playerName(room, id),
+  }));
+  const chosenOpponent = chosenOpponentId
+    ? room.players.find((p) => p.id === chosenOpponentId)
+    : null;
+
+  const historyEntry: SuggestionHistoryEntry = {
+    id: `hist-${Date.now()}-${room.suggestionHistory.length}`,
+    suggesterId: active.suggesterId,
+    suggesterName: playerName(room, active.suggesterId),
+    suggestion: active.suggestion,
+    opposingPlayers,
+    chosenOpponentId: chosenOpponentId,
+    chosenOpponentName: chosenOpponent?.name ?? null,
+    revealedCardId: revealedCardId,
+    noOneOpposed: opposingPlayers.length === 0,
+  };
+  room.suggestionHistory.push(historyEntry);
+
   room.activeSuggestion = null;
   // Auto-advance to next player's turn
   advanceTurn(room);
@@ -313,4 +408,38 @@ export function describeSuggestion(s: Suggestion, deck: CardDef[]): string {
 
 export function cardName(deck: CardDef[], id: string): string {
   return deck.find((c) => c.id === id)?.name ?? id;
+}
+
+// ---------- Bot helpers ----------
+
+const BOT_NAMES = [
+  "Mr. Meeseeks Bot",
+  "Pickle Rick AI",
+  "Squanchy Bot",
+  "Birdperson AI",
+  "Evil Morty Bot",
+];
+let botCounter = 0;
+
+export function nextBotName(): string {
+  return BOT_NAMES[botCounter++ % BOT_NAMES.length];
+}
+
+/** Generate a random suggestion for a bot by picking one random card of each type. */
+export function botRandomSuggestion(room: GameState): Suggestion {
+  const suggestion: Suggestion = {};
+  for (const type of room.config.cardTypes) {
+    const pool = room.deck.filter((c) => c.type === type);
+    if (pool.length > 0) {
+      suggestion[type] = pool[Math.floor(Math.random() * pool.length)].id;
+    }
+  }
+  return suggestion;
+}
+
+/** Pick a random matching card for a bot to reveal, or null if none match. */
+export function botPickRevealCard(bot: Player, suggestion: Suggestion): string | null {
+  const matches = cardsMatchingSuggestion(bot, suggestion);
+  if (matches.length === 0) return null;
+  return matches[Math.floor(Math.random() * matches.length)].id;
 }

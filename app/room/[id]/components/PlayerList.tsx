@@ -15,11 +15,13 @@ export function PlayerList({ state }: { state: ClientGameState }) {
               className={`player-row ${p.isMe ? "me" : ""} ${isCurrent ? "turn" : ""} ${p.eliminated ? "eliminated" : ""} ${!p.connected ? "disconnected" : ""}`}
             >
               <span className="player-name">
+                {p.isBot && <span className="bot-icon">🤖</span>}
                 {p.name}
                 {p.isHost && <span className="badge badge-host">HOST</span>}
+                {p.isBot && <span className="badge badge-bot">BOT</span>}
                 {p.isMe && <span className="badge badge-me">YOU</span>}
                 {p.eliminated && <span className="badge badge-out">OUT</span>}
-                {!p.connected && !p.eliminated && <span className="badge badge-offline">OFFLINE</span>}
+                {!p.connected && !p.eliminated && !p.isBot && <span className="badge badge-offline">OFFLINE</span>}
               </span>
               <span className="player-hand-count">{p.handCount} cards</span>
             </li>

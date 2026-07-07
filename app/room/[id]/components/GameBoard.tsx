@@ -9,9 +9,10 @@ import { PlayerList } from "./PlayerList";
 import { TurnIndicator } from "./TurnIndicator";
 import { SuggestionDialog } from "./SuggestionDialog";
 import { AccusationDialog } from "./AccusationDialog";
-import { Notepad } from "./Notepad";
+import { SuggestionHistory } from "./SuggestionHistory";
 import { GameLog } from "./GameLog";
 import { RevealPrompt } from "./RevealPrompt";
+import { PickOpponentDialog } from "./PickOpponentDialog";
 import { WinnerBanner } from "./WinnerBanner";
 import { ActiveSuggestionBanner } from "./ActiveSuggestionBanner";
 
@@ -27,8 +28,10 @@ export function GameBoard({ state }: { state: ClientGameState }) {
 
   const isMyTurn = !!me && state.currentTurnPlayerId === me.id && !me.eliminated;
   const canAct = isMyTurn && state.turnStage === "awaiting-turn";
-  const mustReveal =
-    state.activeSuggestion?.revealingPlayerId === me?.id;
+  const mustReveal = !!state.activeSuggestion?.iMustRespond;
+  const mustPickOpponent =
+    state.activeSuggestion?.pickingOpponent &&
+    state.activeSuggestion?.suggesterId === me?.id;
 
   function emitSuggest(s: Suggestion) {
     socket?.emit(SOCK_EVENTS.SUGGEST, s);
@@ -72,7 +75,7 @@ export function GameBoard({ state }: { state: ClientGameState }) {
 
         <PlayerHand cards={state.myHand} seenIds={state.mySeenCards} />
 
-        <Notepad state={state} />
+        <SuggestionHistory state={state} />
       </main>
 
       <aside className="col-log">
@@ -96,6 +99,13 @@ export function GameBoard({ state }: { state: ClientGameState }) {
         <RevealPrompt
           state={state}
           onReveal={(cardId) => socket?.emit(SOCK_EVENTS.REVEAL, { cardId })}
+        />
+      )}
+
+      {mustPickOpponent && (
+        <PickOpponentDialog
+          state={state}
+          onPick={(opponentId) => socket?.emit(SOCK_EVENTS.PICK_OPPONENT, { opponentId })}
         />
       )}
     </div>

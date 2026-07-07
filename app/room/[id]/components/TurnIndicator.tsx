@@ -10,11 +10,10 @@ export function TurnIndicator({ state }: { state: ClientGameState }) {
   let stage = "";
   if (state.phase === "finished") stage = "Game over";
   else if (!current) stage = "";
-  else if (state.activeSuggestion?.revealingPlayerId) {
-    const revealer = state.players.find((p) => p.id === state.activeSuggestion!.revealingPlayerId);
-    stage = `${revealer?.name ?? "?"} must respond`;
-  } else if (state.turnStage === "awaiting-turn") stage = "Suggest or accuse";
-  else if (state.turnStage === "revealing") stage = "Awaiting reveal";
+  else if (state.turnStage === "picking-opponent") stage = `${current.name} is choosing an opponent`;
+  else if (state.activeSuggestion?.waitingForResponses) stage = "Awaiting responses";
+  else if (state.turnStage === "awaiting-turn") stage = "Suggest or accuse";
+  else if (state.turnStage === "revealing") stage = "Awaiting reveals";
 
   return (
     <section className="turn-indicator panel">

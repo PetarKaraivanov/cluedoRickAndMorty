@@ -21,6 +21,7 @@ export interface Player {
   id: string;
   name: string;
   isHost: boolean;
+  isBot: boolean;
   ready: boolean;
   hand: CardDef[];
   eliminated: boolean;
@@ -45,13 +46,48 @@ export interface ConfidentialEnvelope {
 
 export type GamePhase = "waiting" | "dealing" | "playing" | "finished";
 
-export type TurnStage = "awaiting-turn" | "suggesting" | "revealing" | "accuse-or-end";
+export type TurnStage = "awaiting-turn" | "suggesting" | "revealing" | "picking-opponent" | "accuse-or-end";
 
 export interface LogEntry {
   id: string;
   ts: number;
   kind: "system" | "turn" | "suggestion" | "reveal" | "accusation" | "win" | "elimination";
   text: string;
+}
+
+// --- Suggestion History ---
+
+export interface SuggestionHistoryEntry {
+  id: string;
+  suggesterId: string;
+  suggesterName: string;
+  suggestion: Suggestion;
+  opposingPlayers: { id: string; name: string }[];
+  chosenOpponentId: string | null;
+  chosenOpponentName: string | null;
+  revealedCardId: string | null;   // only populated for the suggester in client view
+  noOneOpposed: boolean;
+}
+
+// --- Server-side Game State ---
+
+export interface ActiveSuggestion {
+  suggesterId: string;
+  suggestion: Suggestion;
+  /** All opponents who need to respond */
+  revealQueue: string[];
+  /** Maps playerId → cardId they chose to show (null = pass/no match) */
+  opponentResponses: Record<string, string | null>;
+  /** Player IDs who had matching cards (filled once all respond) */
+  opposingPlayerIds: string[];
+  /** True once all opponents have responded */
+  allResponded: boolean;
+  /** The opponent the suggester picked (set during picking-opponent) */
+  chosenOpponentId: string | null;
+  /** The card revealed by the chosen opponent */
+  revealedCardId: string | null;
+  // Legacy fields kept for compatibility during transition
+  revealingPlayerId: string | null;
 }
 
 export interface GameState {
@@ -64,13 +100,8 @@ export interface GameState {
   currentTurnIdx: number;
   turnStage: TurnStage;
   hasSuggested: boolean;
-  activeSuggestion: {
-    suggesterId: string;
-    suggestion: Suggestion;
-    revealQueue: string[];
-    revealingPlayerId: string | null;
-    revealedCardId: string | null;
-  } | null;
+  activeSuggestion: ActiveSuggestion | null;
+  suggestionHistory: SuggestionHistoryEntry[];
   log: LogEntry[];
   winner: string | null;
   createdAt: number;
@@ -78,15 +109,39 @@ export interface GameState {
   finishedAt: number | null;
 }
 
+// --- Client-side views ---
+
 export interface ClientPlayerView {
   id: string;
   name: string;
   isHost: boolean;
+  isBot: boolean;
   ready: boolean;
   handCount: number;
   eliminated: boolean;
   isMe: boolean;
   connected: boolean;
+}
+
+export interface ClientActiveSuggestion {
+  suggesterId: string;
+  suggesterName: string;
+  suggestion: Suggestion;
+  /** Which opponents I need to respond to (for RevealPrompt — true if I'm in queue and haven't responded) */
+  iMustRespond: boolean;
+  /** True while waiting for all opponents to respond */
+  waitingForResponses: boolean;
+  /** Players who opposed (had matching cards) — populated once all responded */
+  opposingPlayers: { id: string; name: string }[];
+  /** True when we're in picking-opponent phase */
+  pickingOpponent: boolean;
+  /** The chosen opponent (set after suggester picks) */
+  chosenOpponentId: string | null;
+  chosenOpponentName: string | null;
+  /** The card revealed — only set for the suggester */
+  revealedCardId: string | null;
+  /** Card revealed specifically to me (the suggester) */
+  revealedToMe: string | null;
 }
 
 export interface ClientGameState {
@@ -100,15 +155,8 @@ export interface ClientGameState {
   currentTurnPlayerId: string | null;
   turnStage: TurnStage;
   hasSuggested: boolean;
-  activeSuggestion: {
-    suggesterId: string;
-    suggesterName: string;
-    suggestion: Suggestion;
-    revealingPlayerId: string | null;
-    revealingPlayerName: string | null;
-    revealedCardId: string | null;
-    revealedToMe: string | null;
-  } | null;
+  activeSuggestion: ClientActiveSuggestion | null;
+  suggestionHistory: SuggestionHistoryEntry[];
   log: LogEntry[];
   winner: string | null;
   winnerName: string | null;

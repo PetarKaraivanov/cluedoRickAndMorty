@@ -576,6 +576,41 @@ a {
   color: var(--bg-deep);
 }
 
+.badge-bot {
+  background: var(--morty);
+  color: #0a0e1a;
+}
+
+.bot-icon {
+  margin-right: 2px;
+}
+
+.player-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  transition: color 0.15s, background 0.15s;
+}
+
+.btn-icon:hover {
+  color: var(--danger);
+  background: hsla(0, 70%, 50%, 0.15);
+}
+
+.btn-remove-bot {
+  font-size: 13px;
+}
+
 .player-row.disconnected {
   opacity: 0.45;
 }
@@ -1042,53 +1077,164 @@ a {
   margin: 12px 0;
 }
 
-/* ---------- Notepad ---------- */
+/* ---------- Suggestion History ---------- */
 
-.notepad-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
+.suggestion-history {
+  margin-top: 12px;
 }
 
-@media (min-width: 480px) {
-  .notepad-grid {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 16px;
-  }
-}
-
-.notepad-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.notepad-row {
-  display: grid;
-  grid-template-columns: 18px 1fr auto;
+.history-list {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  align-items: center;
-  padding: 6px 8px;
-  border-radius: 6px;
+}
+
+.history-entry {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.history-entry:hover {
+  border-color: var(--rick);
+}
+
+.history-mine {
+  border-left: 3px solid var(--rick);
+}
+
+.history-entry-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
   font-size: 13px;
 }
 
-.notepad-row.mine {
+.history-entry-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-suggester {
+  font-weight: 700;
   color: var(--rick);
 }
 
-.notepad-row.seen {
-  color: var(--warning);
+.history-action {
+  color: var(--text-muted);
 }
 
-.notepad-check {
-  font-family: "Courier New", monospace;
-  font-weight: 700;
-}
-
-.notepad-tag {
+.history-expand-icon {
+  margin-left: auto;
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.history-entry-mini-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.history-mini-card {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: hsla(var(--rick-h, 130), 70%, 50%, 0.12);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.history-entry-detail {
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--border);
+  background: hsla(0, 0%, 100%, 0.02);
+}
+
+.history-cards-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.history-opposition {
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-icon {
+  margin-right: 4px;
+}
+
+.history-no-oppose {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.history-opposed-label {
+  color: var(--text);
+}
+
+.history-chosen {
+  color: var(--text);
+}
+
+.history-revealed {
+  color: var(--morty);
+}
+
+.history-revealed-card {
+  font-weight: 700;
+  color: var(--rick);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: hsla(var(--rick-h, 130), 70%, 50%, 0.15);
+}
+
+/* ---------- Pick Opponent Dialog ---------- */
+
+.pick-opponent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pick-opponent-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  font-size: 15px;
+  text-align: left;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.pick-opponent-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px hsla(0, 0%, 0%, 0.3);
+}
+
+.pick-opponent-icon {
+  font-size: 22px;
+}
+
+.pick-opponent-name {
+  font-weight: 600;
 }
 
 /* ---------- Log ---------- */
@@ -1254,6 +1400,11 @@ a {
 .badge-offline {
   background: rgba(139, 149, 179, 0.2);
   color: var(--text-muted);
+}
+
+.badge-bot {
+  background: rgba(255, 183, 77, 0.2);
+  color: var(--morty);
 }
 
 /* ---------- Disconnected player ---------- */

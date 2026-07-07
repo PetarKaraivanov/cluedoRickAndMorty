@@ -6,7 +6,7 @@ import { ALL_CARDS } from "@/lib/cards";
 
 /**
  * A prominent banner visible to ALL players when a suggestion is active.
- * Shows who is suggesting, what cards they picked, and who must respond.
+ * Shows who is suggesting, what cards they picked, and the current status.
  */
 export function ActiveSuggestionBanner({ state }: { state: ClientGameState }) {
   const active = state.activeSuggestion;
@@ -15,6 +15,24 @@ export function ActiveSuggestionBanner({ state }: { state: ClientGameState }) {
   const suggestionCards = Object.entries(active.suggestion)
     .map(([, id]) => ALL_CARDS.find((c) => c.id === id))
     .filter(Boolean);
+
+  let statusText = "";
+  let statusClass = "";
+
+  if (active.waitingForResponses) {
+    statusText = "⏳ Waiting for all players to respond...";
+    statusClass = "";
+  } else if (active.pickingOpponent) {
+    const names = active.opposingPlayers.map((p) => p.name).join(", ");
+    statusText = `🛡️ ${names} can oppose. ${active.suggesterName} is choosing...`;
+    statusClass = "";
+  } else if (active.chosenOpponentName) {
+    statusText = `✅ ${active.suggesterName} picked ${active.chosenOpponentName}`;
+    statusClass = "suggestion-banner-done";
+  } else {
+    statusText = "✅ Reveal cycle complete";
+    statusClass = "suggestion-banner-done";
+  }
 
   return (
     <section className="panel suggestion-banner">
@@ -27,16 +45,9 @@ export function ActiveSuggestionBanner({ state }: { state: ClientGameState }) {
           card ? <Card key={card.id} card={card} size="sm" /> : null,
         )}
       </div>
-      {active.revealingPlayerName && (
-        <div className="suggestion-banner-status">
-          ⏳ Waiting for <strong>{active.revealingPlayerName}</strong> to respond...
-        </div>
-      )}
-      {!active.revealingPlayerId && (
-        <div className="suggestion-banner-status suggestion-banner-done">
-          ✅ Reveal cycle complete
-        </div>
-      )}
+      <div className={`suggestion-banner-status ${statusClass}`}>
+        {statusText}
+      </div>
     </section>
   );
 }

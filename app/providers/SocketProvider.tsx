@@ -15,9 +15,9 @@ import { SOCK_EVENTS } from "@/lib/socket-events";
 
 type Socket = import("socket.io-client").Socket;
 
-// Session storage keys for reconnection
-const SESSION_KEY_NAME = "cluedo_player_name";
-const SESSION_KEY_ROOM = "cluedo_room_id";
+// localStorage keys for persistent reconnection (survives refresh & tab close)
+const STORAGE_KEY_NAME = "cluedo_player_name";
+const STORAGE_KEY_ROOM = "cluedo_room_id";
 
 // ---------- Socket connection (lives for the whole browser session) ----------
 
@@ -32,6 +32,7 @@ interface RoomContextValue {
   state: ClientGameState | null;
   error: string | null;
   joinedRoomId: string | null;
+  reconnecting: boolean;
   join: (args: { name: string; mode: "create" | "join"; roomId?: string }) => void;
   reset: () => void;
   clearError: () => void;
@@ -41,6 +42,7 @@ const RoomContext = createContext<RoomContextValue>({
   state: null,
   error: null,
   joinedRoomId: null,
+  reconnecting: true,
   join: () => {},
   reset: () => {},
   clearError: () => {},
@@ -91,17 +93,19 @@ export function SocketProvider({ children }: { children: ReactNode }) {
  * socket join or wipe local state.
  *
  * Reconnection strategy:
- * - On successful join, we persist { name, roomId } in sessionStorage.
- * - When the socket reconnects (gets a new socket.id), we emit REJOIN
- *   with the stored name + roomId. The server looks up the player by name
- *   and reseats the socket.
+ * - On successful join, we persist { name, roomId } in localStorage (not sessionStorage).
+ *   This means even closing the tab and reopening still remembers the session.
+ * - When the socket connects/reconnects, we emit REJOIN with the stored name + roomId.
+ * - The `reconnecting` flag prevents premature redirect to /lobby while we're
+ *   still trying to rejoin.
  */
 export function RoomSessionProvider({ children }: { children: ReactNode }) {
   const { socket } = useSocket();
   const [state, setState] = useState<ClientGameState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [joinedRoomId, setJoinedRoomId] = useState<string | null>(null);
-  const hasRejoined = useRef(false);
+  const [reconnecting, setReconnecting] = useState(true);
+  const hasAttemptedRejoin = useRef(false);
   const pendingJoin = useRef<{
     name: string;
     mode: "create" | "join";
@@ -127,7 +131,7 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
     };
   }, [socket]);
 
-  // On socket connect/reconnect: try to rejoin if we have session data
+  // On socket connect/reconnect: try to rejoin if we have stored session data
   useEffect(() => {
     if (!socket) return;
 
@@ -143,12 +147,13 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
             if (!ack.ok) {
               setError(ack.error || "Failed to join room.");
             } else {
-              // Persist for reconnection
+              // Persist for reconnection in localStorage
               try {
-                sessionStorage.setItem(SESSION_KEY_NAME, pending.name);
-                if (ack.roomId) sessionStorage.setItem(SESSION_KEY_ROOM, ack.roomId);
+                localStorage.setItem(STORAGE_KEY_NAME, pending.name);
+                if (ack.roomId) localStorage.setItem(STORAGE_KEY_ROOM, ack.roomId);
               } catch {}
             }
+            setReconnecting(false);
           },
         );
         return;
@@ -156,24 +161,30 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
 
       // Otherwise try to reconnect using stored session
       try {
-        const storedName = sessionStorage.getItem(SESSION_KEY_NAME);
-        const storedRoom = sessionStorage.getItem(SESSION_KEY_ROOM);
-        if (storedName && storedRoom && !hasRejoined.current) {
-          hasRejoined.current = true;
+        const storedName = localStorage.getItem(STORAGE_KEY_NAME);
+        const storedRoom = localStorage.getItem(STORAGE_KEY_ROOM);
+        if (storedName && storedRoom && !hasAttemptedRejoin.current) {
+          hasAttemptedRejoin.current = true;
           socket!.emit(
             SOCK_EVENTS.REJOIN,
             { roomId: storedRoom, name: storedName },
             (ack: { ok: boolean; error?: string }) => {
-              hasRejoined.current = false;
               if (!ack.ok) {
                 // Session is stale, clear it
-                sessionStorage.removeItem(SESSION_KEY_NAME);
-                sessionStorage.removeItem(SESSION_KEY_ROOM);
+                localStorage.removeItem(STORAGE_KEY_NAME);
+                localStorage.removeItem(STORAGE_KEY_ROOM);
               }
+              hasAttemptedRejoin.current = false;
+              setReconnecting(false);
             },
           );
+        } else {
+          // Nothing to rejoin
+          setReconnecting(false);
         }
-      } catch {}
+      } catch {
+        setReconnecting(false);
+      }
     }
 
     socket.on("connect", onConnect);
@@ -203,10 +214,10 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
           return;
         }
         pendingJoin.current!.fired = true;
-        // Persist for reconnection
+        // Persist for reconnection in localStorage
         try {
-          sessionStorage.setItem(SESSION_KEY_NAME, name);
-          if (ack.roomId) sessionStorage.setItem(SESSION_KEY_ROOM, ack.roomId);
+          localStorage.setItem(STORAGE_KEY_NAME, name);
+          if (ack.roomId) localStorage.setItem(STORAGE_KEY_ROOM, ack.roomId);
         } catch {}
       },
     );
@@ -218,16 +229,16 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
     setJoinedRoomId(null);
     setError(null);
     try {
-      sessionStorage.removeItem(SESSION_KEY_NAME);
-      sessionStorage.removeItem(SESSION_KEY_ROOM);
+      localStorage.removeItem(STORAGE_KEY_NAME);
+      localStorage.removeItem(STORAGE_KEY_ROOM);
     } catch {}
   }, []);
 
   const clearError = useCallback(() => setError(null), []);
 
   const value = useMemo(
-    () => ({ state, error, joinedRoomId, join, reset, clearError }),
-    [state, error, joinedRoomId, join, reset, clearError],
+    () => ({ state, error, joinedRoomId, reconnecting, join, reset, clearError }),
+    [state, error, joinedRoomId, reconnecting, join, reset, clearError],
   );
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;
 }

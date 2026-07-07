@@ -15,6 +15,8 @@ export function WaitingRoom({ state }: { state: ClientGameState }) {
   const [config, setConfig] = useState<RoomConfig>(state.config);
 
   const allReady = state.players.length >= MIN_PLAYERS && state.players.every((p) => p.ready);
+  const botCount = state.players.filter((p) => p.isBot).length;
+  const canAddBot = isHost && state.players.length < MAX_PLAYERS;
 
   function toggleReady() {
     if (!me) return;
@@ -45,6 +47,14 @@ export function WaitingRoom({ state }: { state: ClientGameState }) {
     socket?.emit(SOCK_EVENTS.START);
   }
 
+  function addBotPlayer() {
+    socket?.emit(SOCK_EVENTS.ADD_BOT);
+  }
+
+  function removeBotPlayer(botId: string) {
+    socket?.emit(SOCK_EVENTS.REMOVE_BOT, { botId });
+  }
+
   return (
     <div className="waiting-grid">
       <section className="panel">
@@ -56,11 +66,26 @@ export function WaitingRoom({ state }: { state: ClientGameState }) {
           {state.players.map((p) => (
             <li key={p.id} className={`player-row ${p.isMe ? "me" : ""}`}>
               <span className="player-name">
+                {p.isBot && <span className="bot-icon">🤖</span>}
                 {p.name} {p.isHost && <span className="badge badge-host">HOST</span>}
+                {p.isBot && <span className="badge badge-bot">BOT</span>}
                 {p.isMe && <span className="badge badge-me">YOU</span>}
               </span>
-              <span className={`ready-dot ${p.ready ? "on" : "off"}`}>
-                {p.ready ? "Ready" : "Not ready"}
+              <span className="player-row-actions">
+                {p.isBot && isHost && (
+                  <button
+                    type="button"
+                    className="btn-icon btn-remove-bot"
+                    onClick={() => removeBotPlayer(p.id)}
+                    title="Remove bot"
+                    aria-label="Remove bot"
+                  >
+                    ✕
+                  </button>
+                )}
+                <span className={`ready-dot ${p.ready ? "on" : "off"}`}>
+                  {p.ready ? "Ready" : "Not ready"}
+                </span>
               </span>
             </li>
           ))}
@@ -73,6 +98,16 @@ export function WaitingRoom({ state }: { state: ClientGameState }) {
           >
             {me?.ready ? "I'm not ready" : "I'm Ready"}
           </button>
+          {isHost && canAddBot && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={addBotPlayer}
+              title="Add an AI bot player"
+            >
+              🤖 Add Bot
+            </button>
+          )}
           {isHost && (
             <button
               type="button"
@@ -143,11 +178,12 @@ export function WaitingRoom({ state }: { state: ClientGameState }) {
       <section className="panel">
         <h2 className="panel-title">How it works</h2>
         <ul className="rules-list">
-          <li>3-8 players. Everyone must press Ready.</li>
+          <li>2-8 players. Add a bot if you need a third player!</li>
           <li>Host picks card types (min 3) and how many of each.</li>
           <li>The engine deals one of each type into the Confidential Envelope.</li>
           <li>Remaining cards are split evenly across all players.</li>
           <li>On your turn: suggest or accuse. Suggestions reveal one hidden card. Wrong accusation eliminates you.</li>
+          <li>🤖 Bots only suggest (never accuse) and pick randomly.</li>
         </ul>
       </section>
     </div>

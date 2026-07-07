@@ -8,14 +8,28 @@ import { useRouter } from "next/navigation";
 
 export default function RoomPage() {
   const router = useRouter();
-  const { state, error, clearError, joinedRoomId } = useRoom();
+  const { state, error, clearError, joinedRoomId, reconnecting } = useRoom();
 
-  // If there's no active room session, send the user back to pick a name/code.
+  // Wait for reconnection to finish before deciding to redirect.
+  // This prevents accidental redirects on refresh/tab reopen.
   useEffect(() => {
+    if (reconnecting) return; // Still trying to rejoin — don't redirect yet
     if (!joinedRoomId) {
       router.replace("/lobby");
     }
-  }, [joinedRoomId, router]);
+  }, [joinedRoomId, reconnecting, router]);
+
+  // While reconnecting, show a loading state instead of redirecting
+  if (reconnecting) {
+    return (
+      <main className="lobby-shell">
+        <div className="lobby-card">
+          <h1 className="lobby-title">Reconnecting...</h1>
+          <p className="lobby-help">Warping back through the portal...</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!joinedRoomId) return null;
 

@@ -15,11 +15,11 @@ export function RevealPrompt({
   const active = state.activeSuggestion;
   if (!active) return null;
 
+  // Show to me only if I must respond (I'm in queue and haven't responded yet)
+  if (!active.iMustRespond) return null;
+
   const me = state.players.find((p) => p.isMe);
   if (!me) return null;
-
-  // Only show when it's specifically my turn to reveal
-  if (active.revealingPlayerId !== me.id) return null;
 
   const matches = state.myHand.filter((c) => active.suggestion[c.type] === c.id);
 
@@ -54,7 +54,8 @@ export function RevealPrompt({
         })}
       </div>
       <p className="muted">
-        You hold {matches.length} matching card{matches.length === 1 ? "" : "s"}. Pick one to secretly reveal:
+        You hold {matches.length} matching card{matches.length === 1 ? "" : "s"}.
+        {matches.length > 0 ? " Pick one to secretly reveal:" : ""}
       </p>
       <div className="reveal-options">
         {matches.map((c) => (
