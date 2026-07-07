@@ -2,6 +2,7 @@ import type { ClientGameState, ClientPlayerView, GameState, LogEntry, Player, Ro
 
 export const SOCK_EVENTS = {
   JOIN: "room:join",
+  REJOIN: "room:rejoin",
   STATE: "room:state",
   READY: "player:ready",
   CONFIG: "host:config",

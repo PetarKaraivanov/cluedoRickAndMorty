@@ -64,6 +64,10 @@ export function findPlayer(room: GameState, playerId: string): Player | undefine
   return room.players.find((p) => p.id === playerId);
 }
 
+export function findPlayerByName(room: GameState, name: string): Player | undefined {
+  return room.players.find((p) => p.name.toLowerCase() === name.toLowerCase());
+}
+
 export function removePlayer(room: GameState, playerId: string): void {
   const idx = room.players.findIndex((p) => p.id === playerId);
   if (idx >= 0) room.players.splice(idx, 1);

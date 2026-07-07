@@ -63,6 +63,7 @@ export interface GameState {
   envelope: ConfidentialEnvelope;
   currentTurnIdx: number;
   turnStage: TurnStage;
+  hasSuggested: boolean;
   activeSuggestion: {
     suggesterId: string;
     suggestion: Suggestion;
@@ -85,6 +86,7 @@ export interface ClientPlayerView {
   handCount: number;
   eliminated: boolean;
   isMe: boolean;
+  connected: boolean;
 }
 
 export interface ClientGameState {
@@ -97,10 +99,13 @@ export interface ClientGameState {
   currentTurnIdx: number;
   currentTurnPlayerId: string | null;
   turnStage: TurnStage;
+  hasSuggested: boolean;
   activeSuggestion: {
     suggesterId: string;
+    suggesterName: string;
     suggestion: Suggestion;
     revealingPlayerId: string | null;
+    revealingPlayerName: string | null;
     revealedCardId: string | null;
     revealedToMe: string | null;
   } | null;

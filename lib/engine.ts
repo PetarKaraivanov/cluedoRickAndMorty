@@ -107,6 +107,7 @@ export function startGame(room: GameState): string | null {
   room.envelope = envelope;
   room.phase = "playing";
   room.turnStage = "awaiting-turn";
+  room.hasSuggested = false;
   room.currentTurnIdx = 0;
   room.startedAt = Date.now();
   room.log.unshift(makeLog("system", "Game started. The killer's identity is sealed in the envelope."));
@@ -144,8 +145,10 @@ export function suggest(
 ): string | null {
   if (room.phase !== "playing") return "Game not in progress.";
   if (room.players[room.currentTurnIdx]?.id !== playerId) return "Not your turn.";
-  if (room.turnStage !== "awaiting-turn" && room.turnStage !== "accuse-or-end") return "Cannot suggest now.";
+  if (room.turnStage !== "awaiting-turn") return "Cannot suggest now.";
+  if (room.hasSuggested) return "You already made a suggestion this turn.";
   if (!isSuggestionComplete(suggestion, room.config.cardTypes)) return "Suggestion is incomplete.";
+  room.hasSuggested = true;
   room.turnStage = "revealing";
   const queue = room.players
     .filter((p) => p.id !== playerId && !p.eliminated)
@@ -161,6 +164,10 @@ export function suggest(
   room.log.unshift(
     makeLog("suggestion", `${playerName(room, playerId)} suspects: ${labels}.`),
   );
+  // If no one to reveal (all eliminated except suggester), finish immediately
+  if (queue.length === 0) {
+    finishSuggestion(room, null);
+  }
   return null;
 }
 
@@ -220,7 +227,8 @@ function finishSuggestion(room: GameState, revealedCardId: string | null): void 
     }
   }
   room.activeSuggestion = null;
-  room.turnStage = "accuse-or-end";
+  // Auto-advance to next player's turn
+  advanceTurn(room);
 }
 
 export function accuse(
@@ -230,7 +238,7 @@ export function accuse(
 ): string | null {
   if (room.phase !== "playing") return "Game not in progress.";
   if (room.players[room.currentTurnIdx]?.id !== playerId) return "Not your turn.";
-  if (room.turnStage !== "awaiting-turn" && room.turnStage !== "accuse-or-end")
+  if (room.turnStage !== "awaiting-turn")
     return "Cannot accuse right now.";
   if (!isSuggestionComplete(suggestion, room.config.cardTypes)) return "Accusation is incomplete.";
   const correct = envelopeMatches(suggestion, room.envelope, room.config.cardTypes);
@@ -252,6 +260,9 @@ export function accuse(
       room.winner = null;
       room.finishedAt = Date.now();
       room.log.unshift(makeLog("system", "No players left who can win. The killer escapes."));
+    } else {
+      // Auto-advance to next player's turn after a wrong accusation
+      advanceTurn(room);
     }
   }
   return null;
@@ -277,6 +288,7 @@ export function advanceTurn(room: GameState): void {
   }
   room.currentTurnIdx = next;
   room.turnStage = "awaiting-turn";
+  room.hasSuggested = false;
   room.log.unshift(makeLog("turn", `${room.players[next].name}'s turn.`));
 }
 

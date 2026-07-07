@@ -13,6 +13,7 @@ import { Notepad } from "./Notepad";
 import { GameLog } from "./GameLog";
 import { RevealPrompt } from "./RevealPrompt";
 import { WinnerBanner } from "./WinnerBanner";
+import { ActiveSuggestionBanner } from "./ActiveSuggestionBanner";
 
 export function GameBoard({ state }: { state: ClientGameState }) {
   const { socket } = useSocket();
@@ -25,6 +26,7 @@ export function GameBoard({ state }: { state: ClientGameState }) {
   }
 
   const isMyTurn = !!me && state.currentTurnPlayerId === me.id && !me.eliminated;
+  const canAct = isMyTurn && state.turnStage === "awaiting-turn";
   const mustReveal =
     state.activeSuggestion?.revealingPlayerId === me?.id;
 
@@ -36,9 +38,6 @@ export function GameBoard({ state }: { state: ClientGameState }) {
     socket?.emit(SOCK_EVENTS.ACCUSE, s);
     setShowAccuse(false);
   }
-  function endTurn() {
-    socket?.emit(SOCK_EVENTS.END_TURN);
-  }
 
   return (
     <div className="game-grid">
@@ -49,11 +48,14 @@ export function GameBoard({ state }: { state: ClientGameState }) {
       <main className="col-main">
         <TurnIndicator state={state} />
 
+        {/* Show active suggestion to ALL players */}
+        <ActiveSuggestionBanner state={state} />
+
         <section className="actions-bar">
           <button
             type="button"
             className="btn btn-secondary"
-            disabled={!isMyTurn || state.turnStage === "revealing"}
+            disabled={!canAct}
             onClick={() => setShowSuggest(true)}
           >
             Suggest
@@ -61,18 +63,10 @@ export function GameBoard({ state }: { state: ClientGameState }) {
           <button
             type="button"
             className="btn btn-danger"
-            disabled={!isMyTurn || state.turnStage === "revealing"}
+            disabled={!canAct}
             onClick={() => setShowAccuse(true)}
           >
             Accuse
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!isMyTurn || state.turnStage === "awaiting-turn" || state.turnStage === "revealing"}
-            onClick={endTurn}
-          >
-            End turn
           </button>
         </section>
 

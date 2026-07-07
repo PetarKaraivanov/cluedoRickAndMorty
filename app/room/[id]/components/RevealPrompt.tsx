@@ -4,7 +4,6 @@ import type { ClientGameState } from "@/lib/types";
 import { Card } from "@/components/Card";
 import { ALL_CARDS } from "@/lib/cards";
 import { Modal } from "@/components/Modal";
-import { useState } from "react";
 
 export function RevealPrompt({
   state,
@@ -14,28 +13,27 @@ export function RevealPrompt({
   onReveal: (cardId: string | null) => void;
 }) {
   const active = state.activeSuggestion;
-  const [open, setOpen] = useState(true);
   if (!active) return null;
 
   const me = state.players.find((p) => p.isMe);
   if (!me) return null;
 
+  // Only show when it's specifically my turn to reveal
+  if (active.revealingPlayerId !== me.id) return null;
+
   const matches = state.myHand.filter((c) => active.suggestion[c.type] === c.id);
 
   return (
     <Modal
-      open={open}
+      open={true}
       title="Show a card?"
-      onClose={() => setOpen(false)}
+      onClose={() => {}}
       footer={
         <>
           <button
             className="btn btn-secondary"
             disabled={matches.length > 0}
-            onClick={() => {
-              onReveal(null);
-              setOpen(false);
-            }}
+            onClick={() => onReveal(null)}
           >
             Pass (no matches)
           </button>
@@ -46,7 +44,7 @@ export function RevealPrompt({
       }
     >
       <p className="muted">
-        {state.players.find((p) => p.id === active.suggesterId)?.name} suggested:
+        {active.suggesterName} suggested:
       </p>
       <div className="reveal-suggestion">
         {Object.entries(active.suggestion).map(([type, id]) => {
@@ -64,10 +62,7 @@ export function RevealPrompt({
             key={c.id}
             card={c}
             size="sm"
-            onClick={() => {
-              onReveal(c.id);
-              setOpen(false);
-            }}
+            onClick={() => onReveal(c.id)}
           />
         ))}
       </div>

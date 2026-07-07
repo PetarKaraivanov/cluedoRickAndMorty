@@ -4,6 +4,7 @@ import type { GameState, ClientGameState, Player, RoomConfig, Suggestion } from 
 import {
   addPlayer,
   findPlayer,
+  findPlayerByName,
   generateRoomCode,
   makeLog,
   removePlayer,
@@ -23,6 +24,7 @@ import {
 
 export const SOCK_EVENTS = {
   JOIN: "room:join",
+  REJOIN: "room:rejoin",
   STATE: "room:state",
   READY: "player:ready",
   CONFIG: "host:config",
@@ -48,6 +50,8 @@ export function initIO(httpServer: HTTPServer): IOServer {
     path: "/api/socketio",
     cors: { origin: "*", methods: ["GET", "POST"] },
     addTrailingSlash: false,
+    pingInterval: 10000,
+    pingTimeout: 20000,
   });
   attachHandlers(io);
   return io;
@@ -62,6 +66,7 @@ function makeClientView(room: GameState, playerId: string): ClientGameState {
     handCount: p.hand.length,
     eliminated: p.eliminated,
     isMe: p.id === playerId,
+    connected: p.lastSeenAt > 0,
   }));
   const me = room.players.find((p) => p.id === playerId);
   const revealedToMe =
@@ -69,6 +74,14 @@ function makeClientView(room: GameState, playerId: string): ClientGameState {
     room.activeSuggestion.suggesterId === playerId
       ? room.activeSuggestion.revealedCardId
       : null;
+
+  const suggesterPlayer = room.activeSuggestion
+    ? room.players.find((p) => p.id === room.activeSuggestion!.suggesterId)
+    : null;
+  const revealingPlayer = room.activeSuggestion?.revealingPlayerId
+    ? room.players.find((p) => p.id === room.activeSuggestion!.revealingPlayerId)
+    : null;
+
   return {
     id: room.id,
     phase: room.phase,
@@ -79,11 +92,14 @@ function makeClientView(room: GameState, playerId: string): ClientGameState {
     currentTurnIdx: room.currentTurnIdx,
     currentTurnPlayerId: room.players[room.currentTurnIdx]?.id ?? null,
     turnStage: room.turnStage,
+    hasSuggested: room.hasSuggested,
     activeSuggestion: room.activeSuggestion
       ? {
           suggesterId: room.activeSuggestion.suggesterId,
+          suggesterName: suggesterPlayer?.name ?? "Unknown",
           suggestion: room.activeSuggestion.suggestion,
           revealingPlayerId: room.activeSuggestion.revealingPlayerId,
+          revealingPlayerName: revealingPlayer?.name ?? null,
           revealedCardId: room.activeSuggestion.revealedCardId,
           revealedToMe,
         }
@@ -98,7 +114,9 @@ function makeClientView(room: GameState, playerId: string): ClientGameState {
 function broadcastState(room: GameState): void {
   if (!io) return;
   for (const p of room.players) {
-    io.to(p.id).emit(SOCK_EVENTS.STATE, makeClientView(room, p.id));
+    if (p.lastSeenAt > 0) {
+      io.to(p.id).emit(SOCK_EVENTS.STATE, makeClientView(room, p.id));
+    }
   }
 }
 
@@ -123,6 +141,7 @@ function createRoom(hostName: string, hostSocketId: string): GameState {
     envelope: {},
     currentTurnIdx: 0,
     turnStage: "awaiting-turn",
+    hasSuggested: false,
     activeSuggestion: null,
     log: [makeLog("system", `Room ${id} created.`)],
     winner: null,
@@ -158,13 +177,26 @@ function joinRoom(room: GameState, name: string, socketId: string): { error?: st
   return { player };
 }
 
-function reseat(room: GameState, oldId: string, newId: string): void {
-  const p = findPlayer(room, oldId);
-  if (!p) return;
-  p.id = newId;
+/** Reconnect a player by reseating their socket id. */
+function reseat(room: GameState, player: Player, newSocketId: string): void {
+  const oldId = player.id;
   store.unbindSocket(oldId);
-  store.bindSocket(newId, room.id, p.id);
-  p.lastSeenAt = Date.now();
+  player.id = newSocketId;
+  store.bindSocket(newSocketId, room.id, newSocketId);
+  player.lastSeenAt = Date.now();
+
+  // Also update any references in activeSuggestion queues
+  if (room.activeSuggestion) {
+    if (room.activeSuggestion.suggesterId === oldId) {
+      room.activeSuggestion.suggesterId = newSocketId;
+    }
+    if (room.activeSuggestion.revealingPlayerId === oldId) {
+      room.activeSuggestion.revealingPlayerId = newSocketId;
+    }
+    room.activeSuggestion.revealQueue = room.activeSuggestion.revealQueue.map((id) =>
+      id === oldId ? newSocketId : id,
+    );
+  }
 }
 
 function attachHandlers(io: IOServer): void {
@@ -195,6 +227,32 @@ function attachHandlers(io: IOServer): void {
       }
       socket.join(room.id);
       ack?.({ ok: true, roomId: room.id });
+      broadcastState(room);
+    });
+
+    // Reconnection: client sends name + roomId to reclaim their seat
+    socket.on(SOCK_EVENTS.REJOIN, (payload: { roomId: string; name: string }, ack?: (r: { ok: boolean; error?: string }) => void) => {
+      const roomId = (payload?.roomId ?? "").toUpperCase().trim();
+      const name = (payload?.name ?? "").trim();
+      if (!roomId || !name) {
+        ack?.({ ok: false, error: "Room ID and name required." });
+        return;
+      }
+      const room = store.room(roomId);
+      if (!room) {
+        ack?.({ ok: false, error: "Room not found." });
+        return;
+      }
+      const player = findPlayerByName(room, name);
+      if (!player) {
+        ack?.({ ok: false, error: "Player not found in this room." });
+        return;
+      }
+      // Reseat: update the player's socket id
+      reseat(room, player, socket.id);
+      socket.join(room.id);
+      room.log.unshift(makeLog("system", `${player.name} reconnected.`));
+      ack?.({ ok: true });
       broadcastState(room);
     });
 
@@ -296,6 +354,7 @@ function attachHandlers(io: IOServer): void {
           return;
         }
       } else if (p) {
+        // Mark as disconnected but keep player in game — they can rejoin
         p.lastSeenAt = 0;
         room.log.unshift(makeLog("system", `${p.name} disconnected.`));
       }

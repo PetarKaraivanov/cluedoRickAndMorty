@@ -15,6 +15,10 @@ import { SOCK_EVENTS } from "@/lib/socket-events";
 
 type Socket = import("socket.io-client").Socket;
 
+// Session storage keys for reconnection
+const SESSION_KEY_NAME = "cluedo_player_name";
+const SESSION_KEY_ROOM = "cluedo_room_id";
+
 // ---------- Socket connection (lives for the whole browser session) ----------
 
 const SocketContext = createContext<{
@@ -64,6 +68,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         path: "/api/socketio",
         transports: ["websocket", "polling"],
         reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: Infinity,
       });
       s.on("connect", () => setConnected(true));
       s.on("disconnect", () => setConnected(false));
@@ -83,12 +89,19 @@ export function SocketProvider({ children }: { children: ReactNode }) {
  * Wraps the whole app and holds the active room state. Lives in the root layout
  * so navigating between /room/waiting and /room/[id] does NOT re-trigger a
  * socket join or wipe local state.
+ *
+ * Reconnection strategy:
+ * - On successful join, we persist { name, roomId } in sessionStorage.
+ * - When the socket reconnects (gets a new socket.id), we emit REJOIN
+ *   with the stored name + roomId. The server looks up the player by name
+ *   and reseats the socket.
  */
 export function RoomSessionProvider({ children }: { children: ReactNode }) {
   const { socket } = useSocket();
   const [state, setState] = useState<ClientGameState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [joinedRoomId, setJoinedRoomId] = useState<string | null>(null);
+  const hasRejoined = useRef(false);
   const pendingJoin = useRef<{
     name: string;
     mode: "create" | "join";
@@ -114,26 +127,64 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
     };
   }, [socket]);
 
-  // Whenever the socket (re)connects and we have a pending or prior join, fire it.
+  // On socket connect/reconnect: try to rejoin if we have session data
   useEffect(() => {
-    if (!socket || !socket.connected) return;
-    // If we already have a joined room, the server tracks us by socket.id, so
-    // reconnection should restore state via the server's broadcast on reconnect.
-    // Only fire a fresh join if we have a pending request that hasn't been sent.
-    const pending = pendingJoin.current;
-    if (pending && !pending.fired) {
-      pending.fired = true;
-      socket.emit(
-        SOCK_EVENTS.JOIN,
-        { mode: pending.mode, roomId: pending.roomId, name: pending.name },
-        (ack: { ok: boolean; roomId?: string; error?: string }) => {
-          if (!ack.ok) {
-            setError(ack.error || "Failed to join room.");
-          }
-        },
-      );
+    if (!socket) return;
+
+    function onConnect() {
+      // Check if we have a pending initial join
+      const pending = pendingJoin.current;
+      if (pending && !pending.fired) {
+        pending.fired = true;
+        socket!.emit(
+          SOCK_EVENTS.JOIN,
+          { mode: pending.mode, roomId: pending.roomId, name: pending.name },
+          (ack: { ok: boolean; roomId?: string; error?: string }) => {
+            if (!ack.ok) {
+              setError(ack.error || "Failed to join room.");
+            } else {
+              // Persist for reconnection
+              try {
+                sessionStorage.setItem(SESSION_KEY_NAME, pending.name);
+                if (ack.roomId) sessionStorage.setItem(SESSION_KEY_ROOM, ack.roomId);
+              } catch {}
+            }
+          },
+        );
+        return;
+      }
+
+      // Otherwise try to reconnect using stored session
+      try {
+        const storedName = sessionStorage.getItem(SESSION_KEY_NAME);
+        const storedRoom = sessionStorage.getItem(SESSION_KEY_ROOM);
+        if (storedName && storedRoom && !hasRejoined.current) {
+          hasRejoined.current = true;
+          socket!.emit(
+            SOCK_EVENTS.REJOIN,
+            { roomId: storedRoom, name: storedName },
+            (ack: { ok: boolean; error?: string }) => {
+              hasRejoined.current = false;
+              if (!ack.ok) {
+                // Session is stale, clear it
+                sessionStorage.removeItem(SESSION_KEY_NAME);
+                sessionStorage.removeItem(SESSION_KEY_ROOM);
+              }
+            },
+          );
+        }
+      } catch {}
     }
-  }, [socket, socket?.connected]);
+
+    socket.on("connect", onConnect);
+    // If already connected, fire immediately
+    if (socket.connected) {
+      onConnect();
+    }
+    return () => {
+      socket.off("connect", onConnect);
+    };
+  }, [socket]);
 
   const join = useCallback<RoomContextValue["join"]>(({ name, mode, roomId }) => {
     if (!socket) {
@@ -152,6 +203,11 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
           return;
         }
         pendingJoin.current!.fired = true;
+        // Persist for reconnection
+        try {
+          sessionStorage.setItem(SESSION_KEY_NAME, name);
+          if (ack.roomId) sessionStorage.setItem(SESSION_KEY_ROOM, ack.roomId);
+        } catch {}
       },
     );
   }, [socket]);
@@ -161,6 +217,10 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
     setState(null);
     setJoinedRoomId(null);
     setError(null);
+    try {
+      sessionStorage.removeItem(SESSION_KEY_NAME);
+      sessionStorage.removeItem(SESSION_KEY_ROOM);
+    } catch {}
   }, []);
 
   const clearError = useCallback(() => setError(null), []);
