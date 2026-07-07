@@ -12,7 +12,7 @@ function make(type: CardTypeId, names: string[]): CardDef[] {
     id: `${type}-${slug(name)}`,
     type,
     name,
-    image: `/placeholders/${type === "person" ? "persons" : `${type}s`}/${slug(name)}.png`,
+    image: `/placeholders/${type === "person" ? "persons" : `${type}s`}/${slug(name)}.jpg`,
   }));
 }
 
@@ -72,8 +72,8 @@ export function cardById(id: string): CardDef | undefined {
 }
 
 export const UI_IMAGES = {
-  logo: "/placeholders/ui/logo.png",
-  cardBack: "/placeholders/ui/card-back.png",
-  envelope: "/placeholders/ui/envelope.png",
-  portalGreen: "/placeholders/ui/portal-green.png",
+  logo: "/placeholders/ui/logo.jpg",
+  cardBack: "/placeholders/ui/card-back.jpg",
+  envelope: "/placeholders/ui/envelope.jpg",
+  portalGreen: "/placeholders/ui/portal-green.jpg",
 };
