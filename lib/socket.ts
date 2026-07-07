@@ -120,6 +120,8 @@ function makeClientView(room: GameState, playerId: string): ClientGameState {
       chosenOpponentName: chosenOpponent?.name ?? null,
       revealedCardId: active.revealedCardId,
       revealedToMe,
+      resolved: active.resolved,
+      noOneOpposed: active.allResponded && active.opposingPlayerIds.length === 0,
     };
   }
 
@@ -225,6 +227,16 @@ function processBotActions(room: GameState): void {
         scheduleBotActions(room);
         return;
       }
+    }
+  }
+
+  // 4) Is it a bot's turn and the suggestion resolved? Auto-end turn (bots never accuse)
+  if (currentPlayer?.isBot && !currentPlayer.eliminated && room.turnStage === "accuse-or-end") {
+    const err = endTurn(room, currentPlayer.id);
+    if (!err) {
+      broadcastState(room);
+      scheduleBotActions(room);
+      return;
     }
   }
 }

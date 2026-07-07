@@ -96,10 +96,9 @@ export function SuggestionHistory({ state }: { state: ClientGameState }) {
 
   if (history.length === 0) {
     return (
-      <section className="panel suggestion-history">
-        <h2 className="panel-title">Investigation History</h2>
+      <div className="suggestion-history">
         <p className="muted">No suggestions have been made yet.</p>
-      </section>
+      </div>
     );
   }
 
@@ -107,8 +106,7 @@ export function SuggestionHistory({ state }: { state: ClientGameState }) {
   const reversed = [...history].reverse();
 
   return (
-    <section className="panel suggestion-history">
-      <h2 className="panel-title">Investigation History</h2>
+    <div className="suggestion-history">
       <p className="muted">
         Tap an entry to see the full suggestion. Only you can see cards shown to you.
       </p>
@@ -121,6 +119,6 @@ export function SuggestionHistory({ state }: { state: ClientGameState }) {
           />
         ))}
       </div>
-    </section>
+    </div>
   );
 }

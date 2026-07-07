@@ -167,6 +167,7 @@ export function suggest(
     allResponded: false,
     chosenOpponentId: null,
     revealedCardId: null,
+    resolved: false,
     revealingPlayerId: null,
   };
 
@@ -321,9 +322,13 @@ function finishSuggestion(room: GameState, chosenOpponentId: string | null, reve
   };
   room.suggestionHistory.push(historyEntry);
 
-  room.activeSuggestion = null;
-  // Auto-advance to next player's turn
-  advanceTurn(room);
+  // Mark as resolved but DON'T clear — let the player see the result
+  active.resolved = true;
+  active.chosenOpponentId = chosenOpponentId;
+  active.revealedCardId = revealedCardId;
+
+  // Pause at "accuse-or-end" so the player can review the result
+  room.turnStage = "accuse-or-end";
 }
 
 export function accuse(
@@ -333,7 +338,7 @@ export function accuse(
 ): string | null {
   if (room.phase !== "playing") return "Game not in progress.";
   if (room.players[room.currentTurnIdx]?.id !== playerId) return "Not your turn.";
-  if (room.turnStage !== "awaiting-turn")
+  if (room.turnStage !== "awaiting-turn" && room.turnStage !== "accuse-or-end")
     return "Cannot accuse right now.";
   if (!isSuggestionComplete(suggestion, room.config.cardTypes)) return "Accusation is incomplete.";
   const correct = envelopeMatches(suggestion, room.envelope, room.config.cardTypes);

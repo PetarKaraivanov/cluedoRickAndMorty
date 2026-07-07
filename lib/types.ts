@@ -86,6 +86,8 @@ export interface ActiveSuggestion {
   chosenOpponentId: string | null;
   /** The card revealed by the chosen opponent */
   revealedCardId: string | null;
+  /** True once the suggestion has fully resolved (result is being shown) */
+  resolved: boolean;
   // Legacy fields kept for compatibility during transition
   revealingPlayerId: string | null;
 }
@@ -142,6 +144,10 @@ export interface ClientActiveSuggestion {
   revealedCardId: string | null;
   /** Card revealed specifically to me (the suggester) */
   revealedToMe: string | null;
+  /** True when the suggestion is fully resolved — result is being displayed */
+  resolved: boolean;
+  /** True if no one had a matching card */
+  noOneOpposed: boolean;
 }
 
 export interface ClientGameState {

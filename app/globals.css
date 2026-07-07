@@ -912,6 +912,12 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.turn-indicator.action-required {
+  border-color: var(--morty);
+  box-shadow: 0 0 12px hsla(36, 100%, 50%, 0.3);
 }
 
 .turn-name {
@@ -926,11 +932,290 @@ a {
   }
 }
 
+.turn-stage-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .turn-stage {
   font-size: 13px;
   color: var(--portal-green);
   text-transform: uppercase;
   letter-spacing: 1px;
+}
+
+.turn-action-badge {
+  font-size: 11px;
+}
+
+/* ---------- Action Badge ---------- */
+
+.action-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: rgba(255, 183, 77, 0.2);
+  color: var(--morty);
+  white-space: nowrap;
+}
+
+.action-badge.pulse {
+  background: rgba(255, 77, 109, 0.2);
+  color: var(--danger);
+  animation: action-pulse 1.2s ease-in-out infinite;
+}
+
+.action-badge.result-badge {
+  background: rgba(151, 206, 76, 0.2);
+  color: var(--portal-green);
+}
+
+.action-badge.active-badge {
+  background: rgba(0, 185, 196, 0.15);
+  color: var(--rick);
+}
+
+@keyframes action-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+/* ---------- Collapsible Section ---------- */
+
+.collapsible-section {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  background: var(--bg-panel);
+  transition: border-color 0.2s;
+}
+
+.collapsible-section.open {
+  border-color: var(--border-strong);
+}
+
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.collapsible-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.collapsible-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.collapsible-icon {
+  font-size: 16px;
+}
+
+.collapsible-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collapsible-chevron {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.collapsible-body {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}
+
+/* ---------- Current Round ---------- */
+
+.current-round-idle {
+  text-align: center;
+  padding: 8px 0;
+}
+
+.current-round-prompt {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--portal-green);
+}
+
+.current-round-waiting {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.current-round-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.current-round-suggestion {
+  background: rgba(0, 185, 196, 0.06);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.current-round-who {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.current-round-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.current-round-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+}
+
+.status-icon {
+  font-size: 18px;
+}
+
+/* Inline reveal prompt */
+.current-round-reveal {
+  background: rgba(255, 77, 109, 0.06);
+  border: 1px solid rgba(255, 77, 109, 0.2);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.current-round-reveal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.current-round-reveal-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Inline pick opponent */
+.current-round-pick {
+  background: rgba(0, 185, 196, 0.06);
+  border: 1px solid rgba(0, 185, 196, 0.2);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+/* Result summary */
+.current-round-result {
+  background: rgba(151, 206, 76, 0.06);
+  border: 1px solid rgba(151, 206, 76, 0.2);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.current-round-result-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.current-round-result-text {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.current-round-result-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.current-round-revealed-card {
+  margin-top: 4px;
+}
+
+.current-round-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+
+/* ---------- Action Timer ---------- */
+
+.action-timer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.action-timer-bar {
+  width: 60px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.action-timer-fill {
+  height: 100%;
+  background: var(--portal-green);
+  border-radius: 2px;
+  transition: width 1s linear;
+}
+
+.action-timer.urgent .action-timer-fill {
+  background: var(--danger);
+  animation: timer-pulse 0.8s ease-in-out infinite;
+}
+
+.action-timer-text {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: "Courier New", monospace;
+  color: var(--text-muted);
+  min-width: 36px;
+}
+
+.action-timer.urgent .action-timer-text {
+  color: var(--danger);
+}
+
+@keyframes timer-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 /* ---------- Modal ---------- */

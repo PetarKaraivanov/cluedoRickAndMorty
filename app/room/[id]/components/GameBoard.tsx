@@ -11,10 +11,9 @@ import { SuggestionDialog } from "./SuggestionDialog";
 import { AccusationDialog } from "./AccusationDialog";
 import { SuggestionHistory } from "./SuggestionHistory";
 import { GameLog } from "./GameLog";
-import { RevealPrompt } from "./RevealPrompt";
-import { PickOpponentDialog } from "./PickOpponentDialog";
 import { WinnerBanner } from "./WinnerBanner";
-import { ActiveSuggestionBanner } from "./ActiveSuggestionBanner";
+import { CollapsibleSection } from "./CollapsibleSection";
+import { CurrentRound } from "./CurrentRound";
 
 export function GameBoard({ state }: { state: ClientGameState }) {
   const { socket } = useSocket();
@@ -32,6 +31,20 @@ export function GameBoard({ state }: { state: ClientGameState }) {
   const mustPickOpponent =
     state.activeSuggestion?.pickingOpponent &&
     state.activeSuggestion?.suggesterId === me?.id;
+  const isResolved = !!state.activeSuggestion?.resolved;
+  const hasActionRequired = mustReveal || mustPickOpponent || (isMyTurn && isResolved);
+
+  // Current round section should auto-expand when there's something to see
+  const roundIsActive = !!state.activeSuggestion || isMyTurn;
+
+  // Build action badge for current round header
+  const actionBadge = mustReveal || mustPickOpponent ? (
+    <span className="action-badge pulse">⚡ ACTION REQUIRED</span>
+  ) : isResolved && isMyTurn ? (
+    <span className="action-badge result-badge">📋 RESULT</span>
+  ) : state.activeSuggestion ? (
+    <span className="action-badge active-badge">ACTIVE</span>
+  ) : null;
 
   function emitSuggest(s: Suggestion) {
     socket?.emit(SOCK_EVENTS.SUGGEST, s);
@@ -49,39 +62,61 @@ export function GameBoard({ state }: { state: ClientGameState }) {
       </aside>
 
       <main className="col-main">
-        <TurnIndicator state={state} />
+        <TurnIndicator state={state} actionRequired={hasActionRequired} />
 
-        {/* Show active suggestion to ALL players */}
-        <ActiveSuggestionBanner state={state} />
+        {/* Action buttons — only when it's your turn and awaiting */}
+        {canAct && (
+          <section className="actions-bar">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setShowSuggest(true)}
+            >
+              🔍 Suggest
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={() => setShowAccuse(true)}
+            >
+              ⚠️ Accuse
+            </button>
+          </section>
+        )}
 
-        <section className="actions-bar">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={!canAct}
-            onClick={() => setShowSuggest(true)}
-          >
-            Suggest
-          </button>
-          <button
-            type="button"
-            className="btn btn-danger"
-            disabled={!canAct}
-            onClick={() => setShowAccuse(true)}
-          >
-            Accuse
-          </button>
-        </section>
+        {/* Current Round — collapsible, auto-expands when active */}
+        <CollapsibleSection
+          title="Current Round"
+          icon="📋"
+          badge={actionBadge}
+          defaultOpen={true}
+          forceOpen={hasActionRequired || !!state.activeSuggestion}
+        >
+          <CurrentRound
+            state={state}
+            onReveal={(cardId) => socket?.emit(SOCK_EVENTS.REVEAL, { cardId })}
+            onPickOpponent={(opponentId) => socket?.emit(SOCK_EVENTS.PICK_OPPONENT, { opponentId })}
+            onEndTurn={() => socket?.emit(SOCK_EVENTS.END_TURN)}
+            onAccuse={() => setShowAccuse(true)}
+          />
+        </CollapsibleSection>
 
-        <PlayerHand cards={state.myHand} seenIds={state.mySeenCards} />
+        {/* Your Hand — collapsible */}
+        <CollapsibleSection title="Your Hand" icon="🃏" defaultOpen={true}>
+          <PlayerHand cards={state.myHand} seenIds={state.mySeenCards} />
+        </CollapsibleSection>
 
-        <SuggestionHistory state={state} />
+        {/* Investigation History — collapsible */}
+        <CollapsibleSection title="Investigation History" icon="📜" defaultOpen={false}>
+          <SuggestionHistory state={state} />
+        </CollapsibleSection>
       </main>
 
       <aside className="col-log">
         <GameLog entries={state.log} />
       </aside>
 
+      {/* Modals — only for complex card pickers */}
       <SuggestionDialog
         open={showSuggest}
         state={state}
@@ -94,20 +129,6 @@ export function GameBoard({ state }: { state: ClientGameState }) {
         onClose={() => setShowAccuse(false)}
         onSubmit={emitAccuse}
       />
-
-      {mustReveal && state.activeSuggestion && (
-        <RevealPrompt
-          state={state}
-          onReveal={(cardId) => socket?.emit(SOCK_EVENTS.REVEAL, { cardId })}
-        />
-      )}
-
-      {mustPickOpponent && (
-        <PickOpponentDialog
-          state={state}
-          onPick={(opponentId) => socket?.emit(SOCK_EVENTS.PICK_OPPONENT, { opponentId })}
-        />
-      )}
     </div>
   );
 }
