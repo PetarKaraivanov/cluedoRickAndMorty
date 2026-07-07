@@ -51,13 +51,13 @@ export function buildDeck(config: RoomConfig): CardDef[] {
 
 export function dealEnvelope(deck: CardDef[], config: RoomConfig): ConfidentialEnvelope {
   const envelope: ConfidentialEnvelope = {};
-  const remaining = deck.slice();
   for (const type of CARD_TYPE_ORDER) {
     if (!config.cardTypes.includes(type)) continue;
-    const idx = remaining.findIndex((c) => c.type === type);
-    if (idx >= 0) {
-      const [picked] = remaining.splice(idx, 1);
-      envelope[type] = picked;
+    // Pick a RANDOM card of this type from the deck
+    const cardsOfType = deck.filter((c) => c.type === type);
+    if (cardsOfType.length > 0) {
+      const randomIdx = Math.floor(Math.random() * cardsOfType.length);
+      envelope[type] = cardsOfType[randomIdx];
     }
   }
   return envelope;
